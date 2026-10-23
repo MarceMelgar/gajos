@@ -1,0 +1,66 @@
+GAJOS — convertir y editar archivos arrastrándolos
+==================================================
+
+Requiere macOS 13 (Ventura) o más nuevo. Funciona en Macs Apple Silicon (M1, M2…) e Intel.
+
+
+1. INSTALAR
+-----------
+Arrastrá "Gajos" a la carpeta "Applications" (Aplicaciones) que está al lado.
+
+
+2. ABRIRLA LA PRIMERA VEZ
+-------------------------
+Gajos no está firmada con una cuenta de desarrollador de Apple, así que la
+primera vez macOS la bloquea con un aviso. Es normal. Para abrirla:
+
+  macOS 15 (Sequoia) o más nuevo:
+    a. Abrí Gajos desde Aplicaciones. Aparece un aviso: tocá "Listo".
+    b. Andá a Configuración del Sistema → Privacidad y seguridad.
+    c. Bajá hasta el final: dice que "Gajos" se bloqueó. Tocá "Abrir igualmente".
+    d. Confirmá con tu contraseña o Touch ID.
+
+  macOS 13 o 14:
+    Clic derecho (o Control + clic) sobre Gajos en Aplicaciones → Abrir → Abrir.
+
+Esto se hace una sola vez. Después abre normal.
+
+
+3. CÓMO SE USA
+--------------
+Gajos vive en la barra de menú (arriba a la derecha, un ícono redondo).
+
+Empezá a arrastrar un archivo y, SIN SOLTARLO, tocá una tecla:
+
+  ⇧ Shift     → Rueda de conversión (cambia de formato: imagen, audio o video)
+  ⌘ Command   → Rueda de herramientas (comprimir, recortar, quitar metadatos;
+                en imágenes también editar, anotar, agregar fondo y tachar;
+                en videos también agregar fondo)
+  ⌃ Control   → Rueda de acciones (copiar ruta, Terminal, ZIP, mover…)
+
+Soltá la tecla: la rueda queda abierta. Soltá el archivo sobre un gajo.
+El resultado se guarda al lado del original; el original nunca se toca.
+
+Las teclas, el estilo y las carpetas favoritas se cambian desde el ícono
+de la barra de menú → Configuración…
+
+
+4. FORMATOS EXTRA (opcional)
+----------------------------
+Sin instalar nada, Gajos ya convierte JPG, PNG, HEIC, TIFF, GIF, BMP, PDF,
+WAV, AIFF, M4A, ALAC, FLAC, MP4, MOV, M4V, HEVC y GIF animado.
+Los PDF se convierten a DOCX (Word), TXT, JPG y PNG; si el PDF es escaneado,
+Gajos reconoce el texto de la imagen (conviene revisarlo).
+
+Para sumar MP3, OPUS, OGG, WEBM, MKV, AVI y WEBP, hacé doble clic en
+"Instalar formatos extra.command". Abre la Terminal e instala lo necesario
+(Homebrew, ffmpeg y webp). Puede pedir tu contraseña y tarda unos minutos.
+
+Si macOS no deja abrirlo con doble clic: clic derecho → Abrir → Abrir
+(en macOS 15, igual que en el paso 2).
+
+
+5. ABRIR AL INICIAR SESIÓN
+--------------------------
+En Configuración de Gajos → General → "Abrir al iniciar sesión".
+Funciona cuando Gajos está en la carpeta Aplicaciones.
