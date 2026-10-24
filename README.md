@@ -10,8 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MarceMelgar/gajos/releases/latest"><b>⬇️ Descargar Gajos 1.4 (.dmg)</b></a>
+  <a href="https://github.com/MarceMelgar/gajos/releases/latest"><b>⬇️ Descargar Gajos 1.5 (.dmg)</b></a>
 </p>
+
+---
+
+## ✨ Mejoras en la versión 1.5
+
+- **Comprimir a medida:** al soltar en Comprimir se abre una ventana para elegir por **calidad** (10 % a 100 %) o por **tamaño final** (por ejemplo, "que pese 2 MB"). Funciona con imágenes, audio, video y PDF: Gajos busca la mejor calidad que entra en ese tamaño.
+- **Fondo con imagen propia:** además de colores y degradados, podés usar cualquier imagen de tu Mac como fondo, con **desenfoque** opcional. En imágenes y en videos.
+- **GIF del tramo que elijas:** el gajo GIF abre la barra de recorte con los primeros 15 s marcados; movés las manijas al tramo que quieras (hasta 15 s).
+- **MKV y WEBM en las herramientas de video:** Recortar, Comprimir y Fondo ahora funcionan con estos formatos (con los formatos extra instalados). Al recortar se mantiene el formato original y no se pierde calidad.
+- **Fondo más fluido:** la ventana de Fondo ya no se traba con fotos grandes; la vista previa se dibuja en segundo plano.
 
 ---
 
@@ -58,7 +68,7 @@ La rueda se adapta al tipo de archivo: una imagen, un audio, un video o un PDF m
 |---|---|
 | **Imagen** | JPG, PNG, HEIC, TIFF, GIF, BMP, PDF, WEBP* |
 | **Audio** | WAV, AIFF, M4A (AAC), ALAC, FLAC, MP3*, OPUS*, OGG* |
-| **Video** | MP4, MOV, M4V, HEVC, 720p, GIF animado, audio en M4A, audio en MP3*, WEBM*, MKV*, AVI* |
+| **Video** | MP4, MOV, M4V, HEVC, 720p, GIF animado (del tramo que elijas, hasta 15 s), audio en M4A, audio en MP3*, WEBM*, MKV*, AVI* |
 | **PDF** | DOCX (Word), TXT, JPG y PNG (una imagen por página) |
 
 <sub>* Requieren los [formatos extra](#formatos-extra-opcional).</sub>
@@ -78,11 +88,11 @@ La rueda se adapta al tipo de archivo: una imagen, un audio, un video o un PDF m
 
 | Herramienta | Qué hace |
 |---|---|
-| **Comprimir** | Achica la imagen (máximo 2560 px) y baja el peso. |
+| **Comprimir** | Por calidad (10 % a 100 %) o por tamaño final ("que pese 2 MB"). |
 | **Metadatos** | Quita ubicación GPS, cámara, fecha y otros datos ocultos, sin perder calidad. |
 | **Editar** | Brillo, contraste, saturación, exposición, nitidez, girar y voltear. |
 | **Anotar** | Flechas, rectángulos, círculos, lápiz y texto, en varios colores. |
-| **Fondo** | Pone la imagen sobre un degradado o color, con margen, esquinas redondeadas, sombra y proporción (Auto, 1:1, 16:9, 4:5). Ideal para capturas de pantalla. |
+| **Fondo** | Pone la imagen sobre un degradado, un color o una imagen tuya (con desenfoque opcional), con margen, esquinas redondeadas, sombra y proporción (Auto, 1:1, 16:9, 4:5). Ideal para capturas de pantalla. |
 | **Recortar** | Elegís el área con el mouse, libre o con proporción fija. |
 | **Tachar** | Tapa zonas en negro, pixeladas o desenfocadas (para datos personales). |
 
@@ -90,9 +100,9 @@ La rueda se adapta al tipo de archivo: una imagen, un audio, un video o un PDF m
   <img src="docs/ventana-fondo.png" width="640" alt="Ventana Fondo">
 </p>
 
-**Audio y video:** comprimir, recortar (con la barra de recorte de QuickTime), quitar metadatos y, en video, **agregar fondo** igual que en las imágenes (manteniendo el audio).
+**Audio y video:** comprimir por calidad o tamaño final, recortar (con la barra de recorte de QuickTime), quitar metadatos y, en video, **agregar fondo** igual que en las imágenes (manteniendo el audio). También con MKV y WEBM.
 
-**PDF:** comprimir, recortar (primera página como imagen) y quitar metadatos (autor, título, etc.).
+**PDF:** comprimir por calidad o tamaño final, recortar (primera página como imagen) y quitar metadatos (autor, título, etc.). Para comprimir mucho un PDF, sus páginas se guardan como imágenes y el texto deja de poder seleccionarse; con calidad 90 % o más el texto se mantiene.
 
 ### Acciones (⌃ Control)
 
@@ -100,20 +110,11 @@ Copiar ruta · Abrir en Terminal · Mostrar en Finder · Duplicar · Comprimir e
 
 ---
 
-### Próxima versión (en desarrollo, todavía no está en el .dmg 1.4)
-
-- **Comprimir a medida:** elegir por **calidad** (10 % a 100 %) o por **tamaño final** ("que pese 2 MB"), en imágenes, audio, video y PDF.
-- **Fondo con imagen propia:** usar cualquier imagen de la Mac como fondo, con desenfoque opcional (en imágenes y videos).
-- **GIF de un tramo:** elegir con la barra de recorte qué parte del video (hasta 15 s) se convierte en GIF.
-- **MKV y WEBM** en Recortar, Comprimir y Fondo (con los formatos extra instalados).
-
----
-
 ## Instalación
 
 **Requisitos:** macOS 13 (Ventura) o más nuevo. Funciona en Macs con Apple Silicon (M1, M2…) e Intel.
 
-1. Descargá **`Gajos-1.4.dmg`** desde [Releases](https://github.com/MarceMelgar/gajos/releases/latest).
+1. Descargá **`Gajos-1.5.dmg`** desde [Releases](https://github.com/MarceMelgar/gajos/releases/latest).
 2. Abrilo y arrastrá **Gajos** a la carpeta **Aplicaciones**.
 3. Abrí Gajos. Aparece un ícono redondo en la barra de menú (arriba a la derecha).
 
@@ -194,7 +195,9 @@ Está hecho en Swift con AppKit y SwiftUI. Las conversiones usan lo que trae mac
 - El texto reconocido en PDF escaneados puede tener errores.
 - En **Tachar**, el pixelado y el desenfoque a veces se pueden revertir: para datos sensibles usá **Negro**.
 - Las canciones viejas de iTunes con DRM (`.m4p`) no se pueden convertir.
-- Agregar fondo a un video recodifica el video entero, así que los videos largos tardan.
+- Agregar fondo a un video o comprimirlo recodifica el video entero, así que los videos largos tardan.
+- Elegir el **tamaño final** de un video requiere los formatos extra (ffmpeg); sin ellos, se puede comprimir por calidad.
+- Al recortar un MKV o WEBM sin recodificar, el inicio se ajusta al cuadro clave más cercano (puede empezar un poco antes).
 
 ---
 

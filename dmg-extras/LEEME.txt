@@ -41,6 +41,10 @@ Empezá a arrastrar un archivo y, SIN SOLTARLO, tocá una tecla:
 Soltá la tecla: la rueda queda abierta. Soltá el archivo sobre un gajo.
 El resultado se guarda al lado del original; el original nunca se toca.
 
+Comprimir abre una ventana para elegir por calidad o por tamaño final
+(por ejemplo, "que pese 2 MB"). El gajo GIF de los videos te deja elegir el
+tramo (hasta 15 s). En Fondo podés usar también una imagen tuya.
+
 Las teclas, el estilo y las carpetas favoritas se cambian desde el ícono
 de la barra de menú → Configuración…
 
