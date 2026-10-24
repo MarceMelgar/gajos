@@ -136,9 +136,15 @@ private struct AboutTab: View {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
             Text("Gajos").font(.title.bold())
             Text("Versión \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")").foregroundStyle(.secondary)
-            Text("Convertí imágenes y hacé acciones rápidas con archivos arrastrándolos y tocando una tecla. Todo funciona en tu Mac, sin internet.")
+            Text("Convertí y editá imágenes, audio, video y PDF arrastrándolos y tocando una tecla. Todo funciona en tu Mac, sin internet.")
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 340)
+            Divider().frame(maxWidth: 240).padding(.vertical, 4)
+            Text("Hecho por **Marce Melgar**")
+            Link("github.com/MarceMelgar/gajos", destination: URL(string: "https://github.com/MarceMelgar/gajos")!)
+                .font(.callout)
+            Text("Inspirado en Tangerine, de Thameem (@th2049)")
+                .font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
