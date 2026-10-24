@@ -4,41 +4,6 @@ import PDFKit
 
 /// Herramientas para imágenes. Nunca modifican el original: guardan una copia al lado.
 enum ImageTools {
-    static let maxCompressedSide = 2560
-
-    /// Achica la imagen si es muy grande y la vuelve a guardar con menos calidad.
-    static func compress(_ url: URL) throws -> String {
-        let format = ImageFormat(fileExtension: url.pathExtension) ?? .png
-        let before = fileSize(url)
-
-        let out: URL
-        if format == .pdf {
-            out = try compressPDF(url)
-        } else {
-            guard let image = try ImageConverter.loadImages(url).first else {
-                throw ConvertError.notAnImage(url.lastPathComponent)
-            }
-            let quality = min(Settings.shared.quality, 0.7)
-            out = try save(downscale(image, maxSide: maxCompressedSide), like: url, suffix: " comprimido", quality: quality)
-        }
-
-        let after = fileSize(out)
-        if after >= before {
-            try? FileManager.default.removeItem(at: out)
-            return "\(url.lastPathComponent) ya está optimizado: no se pudo achicar más"
-        }
-        return "\(out.lastPathComponent): \(formatSize(before)) → \(formatSize(after))"
-    }
-
-    private static func compressPDF(_ url: URL) throws -> URL {
-        guard let doc = PDFDocument(url: url) else { throw ConvertError.notAnImage(url.lastPathComponent) }
-        let out = suffixed(url, " comprimido", ext: "pdf")
-        guard #available(macOS 14, *) else { throw ConvertError.writeFailed(out.lastPathComponent) }
-        let options: [PDFDocumentWriteOption: Any] = [.saveImagesAsJPEGOption: true, .optimizeImagesForScreenOption: true]
-        guard doc.write(to: out, withOptions: options) else { throw ConvertError.writeFailed(out.lastPathComponent) }
-        return out
-    }
-
     /// Copia la imagen sin ubicación GPS, datos de la cámara, fechas ni otros datos ocultos.
     /// En JPG, PNG, HEIC y TIFF lo hace sin volver a comprimir, así que no pierde calidad.
     static func stripMetadata(_ url: URL) throws -> String {
@@ -127,18 +92,6 @@ enum ImageTools {
         return found
     }
 
-    private static func downscale(_ image: CGImage, maxSide: Int) -> CGImage {
-        let longest = max(image.width, image.height)
-        guard longest > maxSide else { return image }
-        let scale = CGFloat(maxSide) / CGFloat(longest)
-        let width = Int(CGFloat(image.width) * scale), height = Int(CGFloat(image.height) * scale)
-        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return image }
-        ctx.interpolationQuality = .high
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return ctx.makeImage() ?? image
-    }
 }
 
 /// "foto.jpg" + " recortado" → "foto recortado.jpg", sin pisar archivos existentes.

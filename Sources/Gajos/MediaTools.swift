@@ -3,43 +3,6 @@ import UniformTypeIdentifiers
 
 /// Herramientas para audio y video. Nunca modifican el original: guardan una copia al lado.
 enum MediaTools {
-    static func compress(_ url: URL, kind: MediaKind) throws -> String {
-        let before = fileSize(url)
-        let out: URL
-        if kind == .video {
-            let asset = AVURLAsset(url: url)
-            guard asset.isReadable else { throw ConvertError.unreadable(url.lastPathComponent) }
-            // HEVC a 1080p como máximo: suele dejar el video en una fracción del tamaño.
-            let compatible = AVAssetExportSession.exportPresets(compatibleWith: asset)
-            let preset = [AVAssetExportPresetHEVC1920x1080, AVAssetExportPreset1920x1080, AVAssetExportPresetMediumQuality]
-                .first { compatible.contains($0) } ?? AVAssetExportPresetMediumQuality
-            out = suffixed(url, " comprimido", ext: "mp4")
-            try AVExport.run(asset, preset: preset, fileType: .mp4, to: out)
-        } else {
-            out = suffixed(url, " comprimido", ext: "m4a")
-            let attempts = [
-                ["-f", "m4af", "-d", "aac", "-s", "3", "-u", "vbrq", "64"],
-                ["-f", "m4af", "-d", "aac"],
-            ]
-            var ok = false
-            for args in attempts where !ok {
-                ok = (try? Shell.run("/usr/bin/afconvert", args + [url.path, out.path])) == 0
-                if !ok { try? FileManager.default.removeItem(at: out) }
-            }
-            if !ok {
-                guard FFmpeg.path != nil else { throw ConvertError.unreadable(url.lastPathComponent) }
-                try FFmpeg.convert(url, to: out, args: ["-vn", "-c:a", "aac", "-b:a", "128k"])
-            }
-        }
-
-        let after = fileSize(out)
-        if after >= before {
-            try? FileManager.default.removeItem(at: out)
-            return "\(url.lastPathComponent) ya está optimizado: no se pudo achicar más"
-        }
-        return "\(out.lastPathComponent): \(formatSize(before)) → \(formatSize(after))"
-    }
-
     /// Copia el archivo sin título, autor, ubicación ni otros datos, sin volver a comprimir.
     static func stripMetadata(_ url: URL) throws -> String {
         let asset = AVURLAsset(url: url)
@@ -74,6 +37,7 @@ enum MediaTools {
     @discardableResult
     static func trim(_ url: URL, range: CMTimeRange) throws -> URL {
         let asset = AVURLAsset(url: url)
+        if !asset.isPlayable { return try trimWithFFmpeg(url, range: range) }
         if let fileType = fileType(of: url),
            let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough),
            session.supportedFileTypes.contains(fileType) {
@@ -85,6 +49,53 @@ enum MediaTools {
         let out = suffixed(url, " recortado", ext: isAudio ? "m4a" : "mp4")
         try AVExport.run(asset, preset: isAudio ? AVAssetExportPresetAppleM4A : AVAssetExportPresetHighestQuality,
                          fileType: isAudio ? .m4a : .mp4, to: out, timeRange: range)
+        return out
+    }
+
+    // MARK: Formatos que macOS no abre (MKV, WEBM, AVI, OGG, OPUS…)
+
+    /// true si el reproductor de macOS no puede abrir el archivo y hace falta una copia para verlo.
+    static func needsPreviewCopy(_ url: URL) -> Bool {
+        !AVURLAsset(url: url).isPlayable
+    }
+
+    /// Copia temporal que macOS sí puede reproducir, solo para elegir el tramo en la ventana de recorte.
+    /// Primero intenta copiar el video sin recodificar (instantáneo); si no se puede reproducir, lo recodifica chico.
+    static func makePreviewCopy(_ url: URL, isAudio: Bool) throws -> URL {
+        guard FFmpeg.path != nil else { throw ConvertError.unreadable(url.lastPathComponent) }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("gajos-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let out = folder.appendingPathComponent(isAudio ? "vista.m4a" : "vista.mp4")
+
+        let attempts: [[String]] = isAudio
+            ? [["-vn", "-c:a", "aac", "-b:a", "128k"]]
+            : [["-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", "-tag:v", "avc1", "-c:a", "aac", "-b:a", "128k"],
+               ["-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=-2:'min(720,ih)'", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "28", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k"]]
+        for args in attempts {
+            try? FileManager.default.removeItem(at: out)
+            if (try? FFmpeg.convert(url, to: out, args: args)) != nil, AVURLAsset(url: out).isPlayable {
+                return out
+            }
+        }
+        try? FileManager.default.removeItem(at: folder)
+        throw ConvertError.unreadable(url.lastPathComponent)
+    }
+
+    /// Corta el original con ffmpeg, en el mismo formato y sin recodificar (rápido y sin perder calidad).
+    /// El inicio se ajusta al cuadro clave más cercano, como hace QuickTime.
+    private static func trimWithFFmpeg(_ url: URL, range: CMTimeRange) throws -> URL {
+        guard let ffmpeg = FFmpeg.path else { throw ConvertError.ffmpegUnavailable }
+        let out = suffixed(url, " recortado", ext: url.pathExtension)
+        let start = String(format: "%.3f", max(range.start.seconds, 0))
+        let duration = String(format: "%.3f", range.duration.seconds)
+        let status = try Shell.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin",
+                                            "-ss", start, "-i", url.path, "-t", duration,
+                                            "-map", "0", "-c", "copy", "-avoid_negative_ts", "make_zero", out.path])
+        if status != 0 {
+            try? FileManager.default.removeItem(at: out)
+            throw ConvertError.writeFailed(out.lastPathComponent)
+        }
         return out
     }
 

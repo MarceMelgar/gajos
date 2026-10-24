@@ -100,6 +100,15 @@ Copiar ruta · Abrir en Terminal · Mostrar en Finder · Duplicar · Comprimir e
 
 ---
 
+### Próxima versión (en desarrollo, todavía no está en el .dmg 1.4)
+
+- **Comprimir a medida:** elegir por **calidad** (10 % a 100 %) o por **tamaño final** ("que pese 2 MB"), en imágenes, audio, video y PDF.
+- **Fondo con imagen propia:** usar cualquier imagen de la Mac como fondo, con desenfoque opcional (en imágenes y videos).
+- **GIF de un tramo:** elegir con la barra de recorte qué parte del video (hasta 15 s) se convierte en GIF.
+- **MKV y WEBM** en Recortar, Comprimir y Fondo (con los formatos extra instalados).
+
+---
+
 ## Instalación
 
 **Requisitos:** macOS 13 (Ventura) o más nuevo. Funciona en Macs con Apple Silicon (M1, M2…) e Intel.

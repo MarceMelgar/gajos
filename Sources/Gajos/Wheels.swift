@@ -30,20 +30,36 @@ enum Wheels {
     /// Comprimir, recortar y quitar metadatos, según el tipo del primer archivo.
     private static func tools(for files: [URL]) -> [Segment] {
         guard let kind = files.first.flatMap(MediaKind.of) else { return [] }
-        let isVideo = kind == .video
 
-        let compress = Segment(title: "Comprimir", symbol: "arrow.down.right.and.arrow.up.left",
-                               background: true, startMessage: isVideo ? "Comprimiendo video…" : nil) { urls in
-            try eachFile(urls) { url in
-                kind == .image ? try ImageTools.compress(url) : try MediaTools.compress(url, kind: kind)
+        // Abre una ventana para elegir por calidad o por tamaño final (una sola para todos los archivos).
+        let compress = Segment(title: "Comprimir", symbol: "arrow.down.right.and.arrow.up.left") { urls in
+            let title = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) archivos"
+            EditorWindow.present(title: "Comprimir — \(title)", size: NSSize(width: 440, height: 340)) { close in
+                CompressToolView(files: urls, close: close)
             }
+            return nil
         }
 
-        let crop = Segment(title: "Recortar", symbol: kind == .image ? "crop" : "timeline.selection") { urls in
+        let crop = Segment(title: "Recortar", symbol: kind == .image ? "crop" : "timeline.selection",
+                           background: true) { urls in
             // Una ventana por archivo, hasta 5 a la vez.
             for url in urls.prefix(5) {
-                if kind == .image { try CropWindowController.present(url) }
-                else { TrimWindowController.present(url, isAudio: kind == .audio) }
+                if kind == .image {
+                    DispatchQueue.main.async {
+                        do { try CropWindowController.present(url) }
+                        catch { Toast.show(error.localizedDescription, ok: false) }
+                    }
+                    continue
+                }
+                // MKV, WEBM, OPUS…: se prepara una copia que macOS pueda reproducir para elegir el tramo.
+                var proxy: URL?
+                if MediaTools.needsPreviewCopy(url) {
+                    DispatchQueue.main.async { Toast.show("Preparando \(url.lastPathComponent)…", ok: true, silent: true) }
+                    proxy = try MediaTools.makePreviewCopy(url, isAudio: kind == .audio)
+                }
+                DispatchQueue.main.async {
+                    TrimWindowController.present(url, isAudio: kind == .audio, proxy: proxy)
+                }
             }
             return nil
         }
@@ -60,10 +76,17 @@ enum Wheels {
             // La ventana de Fondo con un cuadro del video como vista previa.
             let background = Segment(title: "Fondo", symbol: "photo", subtitle: "agregar", background: true) { urls in
                 for url in urls.prefix(5) {
-                    let frame = try VideoBackground.previewFrame(url)
+                    // MKV, WEBM, AVI…: se trabaja sobre una copia en MP4 y el resultado queda junto al original.
+                    var copy: URL?
+                    if MediaTools.needsPreviewCopy(url) {
+                        DispatchQueue.main.async { Toast.show("Preparando \(url.lastPathComponent)…", ok: true, silent: true) }
+                        copy = try VideoBackground.playableCopy(url)
+                    }
+                    let preview = try VideoBackground.previewFrame(copy ?? url)
+                    let frame = EditableImage(frame: preview.full, url: url)
                     DispatchQueue.main.async {
                         EditorWindow.present(title: "Agregar fondo — \(url.lastPathComponent)") { close in
-                            BackgroundToolView(image: frame, isVideo: true, close: close)
+                            BackgroundToolView(image: frame, isVideo: true, videoCopy: copy, close: close)
                         }
                     }
                 }
@@ -145,13 +168,30 @@ enum Wheels {
             }
         case .video:
             return VideoFormat.allCases.map { format in
-                conversionSegment(format.title, subtitle: format.isAvailable ? format.subtitle : "falta ffmpeg",
+                format == .gif ? gifSegment() : conversionSegment(format.title, subtitle: format.isAvailable ? format.subtitle : "falta ffmpeg",
                                   enabled: format.isAvailable, startMessage: "Convirtiendo video a \(format.title)…") {
                     try VideoConverter.convert($0, to: format)
                 }
             }
         case nil:
             return []
+        }
+    }
+
+    /// GIF: abre la barra de recorte para elegir el tramo (hasta 15 s) antes de hacerlo.
+    private static func gifSegment() -> Segment {
+        Segment(title: VideoFormat.gif.title, subtitle: "elegí el tramo", background: true) { urls in
+            for url in urls.prefix(5) {
+                var proxy: URL?
+                if MediaTools.needsPreviewCopy(url) {
+                    DispatchQueue.main.async { Toast.show("Preparando \(url.lastPathComponent)…", ok: true, silent: true) }
+                    proxy = try MediaTools.makePreviewCopy(url, isAudio: false)
+                }
+                DispatchQueue.main.async {
+                    TrimWindowController.present(url, isAudio: false, proxy: proxy, purpose: .gif)
+                }
+            }
+            return nil
         }
     }
 

@@ -1,5 +1,7 @@
 import AppKit
+import CoreImage
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// "Fondo": pone la imagen sobre un fondo de color o degradado, con margen, esquinas redondeadas y sombra.
 struct BackgroundOptions {
@@ -9,6 +11,10 @@ struct BackgroundOptions {
     var shadow: CGFloat
     /// Ancho / alto del resultado; nil = se ajusta a la imagen más el margen.
     var ratio: CGFloat?
+    /// Imagen propia de fondo (reemplaza los colores); cubre todo el lienzo sin deformarse.
+    var picture: CGImage? = nil
+    /// Desenfoque de la imagen de fondo, en píxeles del resultado.
+    var pictureBlur: CGFloat = 0
 }
 
 enum BackgroundRenderer {
@@ -18,6 +24,8 @@ enum BackgroundRenderer {
         let frame: CGRect
         let radius: CGFloat
         let shadow: CGFloat
+        /// Escala aplicada a las medidas (vista previa o video achicado).
+        var scale: CGFloat = 1
 
         var path: CGPath { CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil) }
     }
@@ -38,7 +46,7 @@ enum BackgroundRenderer {
         }
         let frame = CGRect(x: ((w - iw) / 2).rounded(), y: ((h - ih) / 2).rounded(), width: iw, height: ih)
         return Layout(canvas: CGSize(width: w, height: h), frame: frame,
-                      radius: min(o.corners * s, min(iw, ih) / 2), shadow: o.shadow * s)
+                      radius: min(o.corners * s, min(iw, ih) / 2), shadow: o.shadow * s, scale: s)
     }
 
     static func render(_ image: CGImage, _ o: BackgroundOptions, scale s: CGFloat = 1) -> CGImage? {
@@ -66,10 +74,33 @@ enum BackgroundRenderer {
         return ctx.makeImage()
     }
 
+    private static let ciContext = CIContext()
+
+    /// Dibuja la imagen de fondo cubriendo todo el lienzo (recortando lo que sobra), con desenfoque opcional.
+    private static func drawPicture(_ picture: CGImage, blur: CGFloat, in ctx: CGContext, canvas: CGRect) {
+        let pw = CGFloat(picture.width), ph = CGFloat(picture.height)
+        let scale = max(canvas.width / pw, canvas.height / ph)
+        let rect = CGRect(x: (canvas.width - pw * scale) / 2, y: (canvas.height - ph * scale) / 2,
+                          width: pw * scale, height: ph * scale)
+        var image = picture
+        if blur > 0.5 {
+            // Se desenfoca a la escala en que se va a dibujar, para que el efecto sea igual en vista previa y resultado.
+            let source = CIImage(cgImage: picture).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            let blurred = source.clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blur])
+                .cropped(to: source.extent)
+            if let cg = ciContext.createCGImage(blurred, from: source.extent) { image = cg }
+        }
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: rect)
+    }
+
     private static func backdropContext(_ l: Layout, _ o: BackgroundOptions) -> CGContext? {
         guard let ctx = Draw.context(width: Int(l.canvas.width), height: Int(l.canvas.height)) else { return nil }
         let canvas = CGRect(origin: .zero, size: l.canvas)
-        if o.colors.count > 1,
+        if let picture = o.picture {
+            drawPicture(picture, blur: o.pictureBlur * l.scale, in: ctx, canvas: canvas)
+        } else if o.colors.count > 1,
            let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: o.colors as CFArray, locations: nil) {
             ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: canvas.maxY), end: CGPoint(x: canvas.maxX, y: 0), options: [])
         } else {
@@ -118,8 +149,10 @@ struct BackgroundToolView: View {
     let close: () -> Void
     /// Si es un video, `image` es un cuadro para la vista previa y al guardar se procesa el video entero.
     var isVideo = false
+    /// Copia en MP4 para procesar cuando el original es MKV, WEBM… (se borra al terminar).
+    var videoCopy: URL?
 
-    private enum Fill: Hashable { case gradient(Int), solid(Int), custom }
+    private enum Fill: Hashable { case gradient(Int), solid(Int), custom, picture }
     private static let ratios: [(String, CGFloat?)] = [("Auto", nil), ("1:1", 1), ("16:9", 16.0 / 9), ("4:5", 4.0 / 5)]
 
     @State private var fill: Fill = .gradient(0)
@@ -130,10 +163,14 @@ struct BackgroundToolView: View {
     @State private var ratio = 0
     @State private var preview: CGImage?
     @State private var saving = false
+    @State private var picture: CGImage?
+    @State private var pictureName = ""
+    @State private var pictureBlur = 0.0
 
-    init(image: EditableImage, isVideo: Bool = false, close: @escaping () -> Void) {
+    init(image: EditableImage, isVideo: Bool = false, videoCopy: URL? = nil, close: @escaping () -> Void) {
         self.image = image
         self.isVideo = isVideo
+        self.videoCopy = videoCopy
         self.close = close
         _padding = State(initialValue: Self.defaults(image).padding)
         _corners = State(initialValue: Self.defaults(image).corners)
@@ -151,15 +188,16 @@ struct BackgroundToolView: View {
         switch fill {
         case .gradient(let i): colors = BackgroundPalette.gradients[i]
         case .solid(let i): colors = [BackgroundPalette.solids[i]]
-        case .custom: colors = [NSColor(custom).usingColorSpace(.sRGB)?.cgColor ?? .white]
+        case .custom, .picture: colors = [NSColor(custom).usingColorSpace(.sRGB)?.cgColor ?? .white]
         }
         return BackgroundOptions(colors: colors, padding: padding, corners: corners, shadow: shadow,
-                                 ratio: Self.ratios[ratio].1)
+                                 ratio: Self.ratios[ratio].1,
+                                 picture: fill == .picture ? picture : nil, pictureBlur: pictureBlur)
     }
 
     /// Cambia cada vez que cambia algo que afecta la vista previa.
     private var previewKey: String {
-        "\(fill)|\(NSColor(custom).usingColorSpace(.sRGB)?.hexString ?? "")|\(Int(padding))|\(Int(corners))|\(Int(shadow))|\(ratio)"
+        "\(fill)|\(NSColor(custom).usingColorSpace(.sRGB)?.hexString ?? "")|\(Int(padding))|\(Int(corners))|\(Int(shadow))|\(ratio)|\(pictureName)|\(Int(pictureBlur))"
     }
 
     var body: some View {
@@ -205,8 +243,19 @@ struct BackgroundToolView: View {
                                     supportsOpacity: false)
                             .labelsHidden()
                             .help("Otro color")
+                        if let picture {
+                            swatch(ImagePaint(image: Image(nsImage: picture.nsImage), scale: 22 / CGFloat(picture.height)), .picture)
+                                .help(pictureName)
+                        }
+                        Button(action: choosePicture) {
+                            Label(picture == nil ? "Imagen…" : "Otra imagen…", systemImage: "photo.on.rectangle")
+                        }
+                        .help("Usar una imagen de tu Mac como fondo")
                     }
                 }
+            }
+            if fill == .picture {
+                SliderRow(title: "Desenfoque", value: $pictureBlur, range: 0...Double(image.longSide * 0.05))
             }
             SliderRow(title: "Margen", value: $padding, range: 0...Double(image.longSide * 0.4))
             SliderRow(title: "Esquinas", value: $corners, range: 0...Double(image.longSide * 0.2))
@@ -251,12 +300,13 @@ struct BackgroundToolView: View {
     private func save() {
         if isVideo {
             // El video puede tardar: se cierra la ventana y se avisa al terminar.
-            let url = image.url, options = options
+            let url = image.url, options = options, copy = videoCopy
             close()
             Toast.show("Agregando fondo al video…", ok: true, silent: true)
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let out = try VideoBackground.export(url, options: options)
+                    defer { if let copy { try? FileManager.default.removeItem(at: copy.deletingLastPathComponent()) } }
+                    let out = try VideoBackground.export(copy ?? url, options: options, outputLike: url)
                     DispatchQueue.main.async { Toast.show("Guardado \(out.lastPathComponent)", ok: true) }
                 } catch {
                     DispatchQueue.main.async { Toast.show(error.localizedDescription, ok: false) }
@@ -275,9 +325,28 @@ struct BackgroundToolView: View {
         }
     }
 
+    /// Elegir una imagen de la Mac para usar de fondo.
+    private func choosePicture() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.prompt = "Usar de fondo"
+        panel.message = "Elegí una imagen para el fondo"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            guard let loaded = try ImageConverter.loadImages(url).first else { throw ConvertError.notAnImage(url.lastPathComponent) }
+            // No hace falta más resolución que la del resultado más grande (4K).
+            picture = Draw.downscale(loaded, maxSide: 4000)
+            pictureName = url.lastPathComponent
+            fill = .picture
+        } catch {
+            Toast.show(error.localizedDescription, ok: false)
+        }
+    }
+
     private func reset() {
         let d = Self.defaults(image)
         fill = .gradient(0)
+        pictureBlur = 0
         padding = d.padding
         corners = d.corners
         shadow = d.shadow

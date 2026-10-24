@@ -109,11 +109,35 @@ enum VideoConverter {
         return [out]
     }
 
-    /// GIF de 10 cuadros por segundo, 480 px de ancho como máximo.
-    private static func makeGIF(from asset: AVURLAsset, to out: URL) throws {
+    /// GIF de un tramo elegido del video (hasta 15 s), guardado junto al original.
+    @discardableResult
+    static func gif(_ url: URL, range: CMTimeRange) throws -> URL {
+        let out = suffixed(url, "", ext: "gif")
+        let asset = AVURLAsset(url: url)
+        if asset.isReadable {
+            try makeGIF(from: asset, to: out, range: range)
+            return out
+        }
+        // MKV, WEBM…: con ffmpeg, mismo tamaño y velocidad de cuadros.
+        guard let ffmpeg = FFmpeg.path else { throw ConvertError.unreadable(url.lastPathComponent) }
+        let start = String(format: "%.3f", max(range.start.seconds, 0))
+        let duration = String(format: "%.3f", min(range.duration.seconds, VideoFormat.gifMaxSeconds))
+        let status = try Shell.run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-ss", start, "-t", duration,
+                                            "-i", url.path, "-vf", "fps=10,scale=480:-2:flags=lanczos", "-loop", "0", out.path])
+        if status != 0 {
+            try? FileManager.default.removeItem(at: out)
+            throw ConvertError.writeFailed(out.lastPathComponent)
+        }
+        return out
+    }
+
+    /// GIF de 10 cuadros por segundo, 480 px de ancho como máximo. Sin tramo: desde el principio.
+    private static func makeGIF(from asset: AVURLAsset, to out: URL, range: CMTimeRange? = nil) throws {
         guard !asset.tracks(withMediaType: .video).isEmpty else { throw ConvertError.notAnImage(out.lastPathComponent) }
         let fps = 10.0
-        let seconds = min(asset.duration.seconds, VideoFormat.gifMaxSeconds)
+        let offset = range.map { max($0.start.seconds, 0) } ?? 0
+        let available = asset.duration.seconds - offset
+        let seconds = min(range?.duration.seconds ?? available, available, VideoFormat.gifMaxSeconds)
         let count = max(1, Int(seconds * fps))
 
         let generator = AVAssetImageGenerator(asset: asset)
@@ -131,7 +155,7 @@ enum VideoConverter {
 
         var added = 0
         for i in 0..<count {
-            let time = CMTime(seconds: Double(i) / fps, preferredTimescale: 600)
+            let time = CMTime(seconds: offset + Double(i) / fps, preferredTimescale: 600)
             if let image = try? generator.copyCGImage(at: time, actualTime: nil) {
                 CGImageDestinationAddImage(dest, image, frame as CFDictionary)
                 added += 1

@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import CoreMedia
 import ServiceManagement
 import SwiftUI
@@ -43,17 +44,41 @@ enum SelfTest {
             // Fondo para videos: 16:9 con degradado y, por separado, 1:1 con color liso.
             for file in files where MediaKind.of(file) == .video {
                 do {
-                    let frame = try VideoBackground.previewFrame(file)
+                    let copy = MediaTools.needsPreviewCopy(file) ? try VideoBackground.playableCopy(file) : nil
+                    let frame = try VideoBackground.previewFrame(copy ?? file)
                     let w = frame.longSide
                     for (ratio, colors) in [(16.0 / 9, BackgroundPalette.gradients[6]), (1.0, [BackgroundPalette.solids[0]])] {
                         let o = BackgroundOptions(colors: colors, padding: w * 0.08, corners: w * 0.03, shadow: w * 0.02, ratio: ratio)
                         let start = Date()
-                        let out = try VideoBackground.export(file, options: o)
+                        let out = try VideoBackground.export(copy ?? file, options: o, outputLike: file)
                         print("OK   \(file.lastPathComponent) → \(out.lastPathComponent) en \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
                     }
                 } catch {
                     print("FAIL \(file.lastPathComponent): \(error.localizedDescription)")
                 }
+            }
+            return
+        }
+        if mode == "compress" {
+            // Por calidad (30 %) y por tamaño final (40 % del original) para cada archivo.
+            for file in files {
+                let target = Int64(Double(fileSize(file)) * 0.4)
+                for (name, t) in [("calidad 30 %", CompressTarget.quality(0.3)), ("tamaño \(formatSize(target))", .size(target))] {
+                    let start = Date()
+                    do {
+                        let msg = try Compressor.compress(file, target: t).replacingOccurrences(of: "\n", with: " ")
+                        print("OK   \(file.lastPathComponent) [\(name)] \(msg) (\(String(format: "%.1f", Date().timeIntervalSince(start))) s)")
+                    } catch { print("FAIL \(file.lastPathComponent) [\(name)]: \(error.localizedDescription)") }
+                }
+            }
+            return
+        }
+        if mode == "gif" {
+            // GIF del tramo 2 s → 5 s.
+            for file in files where MediaKind.of(file) == .video {
+                let range = CMTimeRange(start: CMTime(seconds: 2, preferredTimescale: 600), end: CMTime(seconds: 5, preferredTimescale: 600))
+                do { print("OK   GIF \(file.lastPathComponent) → \(try VideoConverter.gif(file, range: range).lastPathComponent)") }
+                catch { print("FAIL GIF \(file.lastPathComponent): \(error.localizedDescription)") }
             }
             return
         }
@@ -64,6 +89,12 @@ enum SelfTest {
         if mode == "trim" {
             // Recorta del segundo 0,5 al 1,5 de cada audio o video.
             for file in files where [.audio, .video].contains(MediaKind.of(file)) {
+                if MediaTools.needsPreviewCopy(file) {
+                    do {
+                        let copy = try MediaTools.makePreviewCopy(file, isAudio: MediaKind.of(file) == .audio)
+                        print("OK   copia para ver \(file.lastPathComponent) → \(copy.lastPathComponent), reproducible: \(AVURLAsset(url: copy).isPlayable)")
+                    } catch { print("FAIL copia para ver \(file.lastPathComponent): \(error.localizedDescription)") }
+                }
                 let range = CMTimeRange(start: CMTime(seconds: 0.5, preferredTimescale: 600),
                                         end: CMTime(seconds: 1.5, preferredTimescale: 600))
                 do { print("OK   recortar \(file.lastPathComponent) → \(try MediaTools.trim(file, range: range).lastPathComponent)") }
@@ -110,6 +141,16 @@ enum SelfTest {
         _ = BackgroundRenderer.render(image.preview, bg, scale: image.previewScale)
         print("     vista previa de Fondo: \(Int(Date().timeIntervalSince(start) * 1000)) ms")
         report("fondo", BackgroundRenderer.render(image.full, bg))
+        // Fondo con imagen propia (la misma imagen girada, para que se note), sin y con desenfoque.
+        var turned = EditSettings(); turned.quarterTurns = 2; turned.saturation = 1.6
+        if let picture = EditRenderer.render(image.full, turned) {
+            for blur in [0.0, w * 0.02] {
+                var withPicture = bg
+                withPicture.picture = picture
+                withPicture.pictureBlur = blur
+                report(blur == 0 ? "fondo-imagen" : "fondo-imagen-desenfocada", BackgroundRenderer.render(image.full, withPicture))
+            }
+        }
         print("     Fondo a tamaño completo: \(Int(Date().timeIntervalSince(start) * 1000)) ms en total")
         let box = CGRect(x: w * 0.1, y: h * 0.1, width: w * 0.35, height: h * 0.25)
         for style in RedactStyle.allCases {

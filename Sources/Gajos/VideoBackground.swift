@@ -7,6 +7,26 @@ enum VideoBackground {
     /// Lado más largo permitido del resultado (los códecs de Apple llegan a 4K).
     static let maxSide: CGFloat = 3840
 
+    /// Copia en MP4 que macOS puede procesar, para videos MKV, WEBM, AVI…
+    /// Primero intenta sin recodificar (instantáneo); si no, recodifica en alta calidad.
+    static func playableCopy(_ url: URL) throws -> URL {
+        guard FFmpeg.path != nil else { throw ConvertError.unreadable(url.lastPathComponent) }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("gajos-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let out = folder.appendingPathComponent("video.mp4")
+        let attempts: [[String]] = [
+            ["-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", "-tag:v", "avc1", "-c:a", "aac", "-b:a", "192k"],
+            ["-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-crf", "16", "-preset", "fast",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"],
+        ]
+        for args in attempts {
+            try? FileManager.default.removeItem(at: out)
+            if (try? FFmpeg.convert(url, to: out, args: args)) != nil, AVURLAsset(url: out).isReadable { return out }
+        }
+        try? FileManager.default.removeItem(at: folder)
+        throw ConvertError.unreadable(url.lastPathComponent)
+    }
+
     /// Un cuadro del video (cerca del primer segundo) para la vista previa.
     static func previewFrame(_ url: URL) throws -> EditableImage {
         let asset = AVURLAsset(url: url)
@@ -21,7 +41,8 @@ enum VideoBackground {
     }
 
     @discardableResult
-    static func export(_ url: URL, options o: BackgroundOptions) throws -> URL {
+    /// `outputLike` es el archivo original cuando `url` es una copia temporal (MKV, WEBM…): el resultado va a su lado.
+    static func export(_ url: URL, options o: BackgroundOptions, outputLike original: URL? = nil) throws -> URL {
         let asset = AVURLAsset(url: url)
         guard let track = asset.tracks(withMediaType: .video).first else { throw ConvertError.unreadable(url.lastPathComponent) }
 
@@ -62,8 +83,9 @@ enum VideoBackground {
         }
         composition.renderSize = l.canvas
 
-        let fileType: AVFileType = url.pathExtension.lowercased() == "mov" ? .mov : .mp4
-        let out = suffixed(url, " con fondo", ext: fileType == .mov ? "mov" : "mp4")
+        let target = original ?? url
+        let fileType: AVFileType = target.pathExtension.lowercased() == "mov" ? .mov : .mp4
+        let out = suffixed(target, " con fondo", ext: fileType == .mov ? "mov" : "mp4")
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             throw ConvertError.incompatible("video con fondo")
         }
